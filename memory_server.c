@@ -14,7 +14,7 @@
 #include <arpa/inet.h>
 #include <time.h>
 
-#define SERVER_PORT 2001
+#define SERVER_PORT 2002
 #define QUEUE_SIZE 5        
 #define BUFSIZE 100
 #define N 8
@@ -23,11 +23,12 @@ struct TThreadData{
     int *secSocket;
     int **tabl;
     int *active;
+    int *wiadomosc;
 };
 
 struct TThreadData for_thread;
 int x;
-int *wart;
+
 int sprawdz(int **tab,int x, int y)
 {
     if(tab[x][y]==0)
@@ -123,13 +124,13 @@ int convert(char *t,int *tab)
        return 1;
 }
 
-int sprawdz_poprawnosc(int *tb)
+int sprawdz_poprawnosc(int *tb,int *wart)
 {
-    if(for_thread.tabl[tb[0]][tb[1]]==for_thread.tabl[tb[2]][tb[3]])
+    if(for_thread.tabl[tb[0]][tb[1]]==for_thread.tabl[tb[2]][tb[3]] &&( tb[0]!=tb[2] && tb[1]!=tb[3]))
     {   wart[0]=for_thread.tabl[tb[0]][tb[1]];
         wart[1]=for_thread.tabl[tb[2]][tb[3]];
-       // for_thread.tabl[tb[0]-1][tb[1]-1]=htonl(-1);
-        //for_thread.tabl[tb[2]-1][tb[3]-1]=htonl(-1);
+        for_thread.tabl[tb[0]-1][tb[1]-1]=htonl(-1);
+        for_thread.tabl[tb[2]-1][tb[3]-1]=htonl(-1);
         return 2;
     }
     else
@@ -146,26 +147,38 @@ void pokaz_matrix()
     for(i=0;i<N;i++)
     {
         for(j=0;j<N;j++)
-            printf("%d ",ntohl(for_thread.tabl[i][j]));
+            printf("%d ",for_thread.tabl[i][j]);
         printf("\n");
     }
 }
 
-/*struct TThreadData{
-    int *secSocket;
-    int **tab;
-    int *active;
-};*/
-
+int *scal_wiadomosc(int komunikat,int* wspolrzedne,int *wartosci)
+{
+    int *wiad2;
+    wiad2=(int *)malloc((N-1)*sizeof(int));
+    int tmp=0;
+    int i;
+    for(i=0;i<N-1;i++)
+    {
+        if(i==0)
+            wiad2[i]=komunikat;
+        else if(i>0 && i<5)
+            wiad2[i]=wspolrzedne[tmp++]+1;
+        else
+        {
+            wiad2[i]=wartosci[i-1-tmp];
+        }
+    }
+    return wiad2;
+}
 socklen_t nTmp;
 struct sockaddr_in stAddr;
 
 short end;
 
-int odp;
 int *tb;
 int q=0;
-int wiadomosc;
+int wiad;
 
 void* readingThread(void* data){
     int i;
@@ -173,12 +186,13 @@ void* readingThread(void* data){
     int spr;
     int spr2;
     char *buf;
+    int *wart;
+    wart=(int*)malloc(2*sizeof(int));
    int x;
     while(1) {
     buf=(char *)malloc(BUFSIZE*sizeof(char));
 	bzero(buf,BUFSIZE);
-/*    for(i=0;i<BUFSIZE;i++)
-    buffer[i]=-1;*/
+
 	x=read(mSocket, buf, BUFSIZE);
     if(x<= 0 )
     {
@@ -199,91 +213,50 @@ void* readingThread(void* data){
     }
 	else if(x > 0){
         printf("xxxxxxxxxxxxxxxx %d\n",x);
-     for(i=0;i<q;i++){
+    /* for(i=0;i<q;i++){
             if(for_thread.active[i]==1)
-            {                
-      //    odp = write(mSocket, buffer, BUFSIZE);
-             
-            spr=convert(buf,tb);
+            {      */          
+                spr=convert(buf,tb);
 
-            printf(" spr %d\n",spr);
-            
                 if(spr==2)
                 {
                     for(i=0;i<4;i++){
                         tb[i]=tb[i]-1;
-                      //  printf(" tb %d\n",tb[i]);
                     }
-                    spr2 =sprawdz_poprawnosc(tb);
+                    spr2 =sprawdz_poprawnosc(tb,wart);
                 }
                 else
                   end=9;
-                
+                printf("spr2 %d\n",spr2);
                 if(spr2==2)
-                     wiadomosc=end=1;
+                     wiad=end=1;
                 else
-                    wiadomosc= end=2;
+                    wiad= end=2;
                 
             //---------------------------------------------
-            for(i=0;i<4;i++)
-                printf("%d ",tb[i]);
-            
-        for(i=0;i<2;i++)
-            printf("wyn %d\n",wart[i]);
-            printf("fdfdf\n");
-        if(end==1)
+       
+        for_thread.wiadomosc=scal_wiadomosc(wiad,tb,wart);
+        for(i=0;i<N-1;i++)
+            printf("%d ",for_thread.wiadomosc[i]);
+        printf("\n");
+        if(end>0 && end<3)
         {
-            int control;
            for(i=0;i<q;i++){
-              if((control=write(for_thread.secSocket[i],&wiadomosc,sizeof(int))<0) && for_thread.active[i]==1)
-              { //perror("error");
-                  printf("control %d\n",control);
-              }
-               for(i=0;i<4;i++)
-                        tb[i]=tb[i]+1;
-              if(write(for_thread.secSocket[i],tb,4*sizeof(int))<0 && for_thread.active[i]==1)
-              {// perror("error");
-                  printf("for_thread %d\n",end);
-              }
-             if(write(for_thread.secSocket[i],wart,2*sizeof(int))<0 && for_thread.active[i]==1)
+             
+             if((write(for_thread.secSocket[i],for_thread.wiadomosc,(N-1)*sizeof(int))<0) && (for_thread.active[i]==1))
               { //perror("error");
                   printf("for_thread %d\n",end);
               }
            }
             pokaz_matrix();
             end=9;
-        }else if(end==2)
-        {
-            int control;
-            for(i=0;i<q;i++){
-              if((control=write(for_thread.secSocket[i],&wiadomosc,sizeof(int)))<0 && for_thread.active[i]==1 )
-              {
-                      // perror("error");
-                        printf("control %d\n",control);
-              }
-               for(i=0;i<4;i++)
-                        tb[i]=tb[i]+1;
-              if(write(for_thread.secSocket[i],tb,4*sizeof(int))<0 && for_thread.active[i]==1)
-              {// perror("error");
-                  printf("for_thread %d\n",end);
-              }
-              if(write(for_thread.secSocket[i],wart,2*sizeof(int))<0 && for_thread.active[i]==1)
-              {// perror("error");
-                  printf("for_thread %d\n",end);
-              }
-            }
-            end=9;
         }
-            }
-        }
+        
         free(buf);
     	}
     
         //----------------------------------
       
-        //*/
-    
-    
     }
    return NULL;
   /* int r=1;
@@ -299,11 +272,12 @@ int main(int argc, char* argv[]){
     int i,j;
     int kafelek=N*N/2;
     x=N;
+    for_thread.wiadomosc=(int *)malloc((N-1)*sizeof(int));
    tab=(int**)malloc(N*sizeof(int*));
     for(i=0;i<N;i++)
         tab[i]=(int*)malloc(N*sizeof(int));
      tb=(int*)malloc(4*sizeof(int));
-    wart=(int*)malloc(2*sizeof(int));
+  
     for_thread.secSocket=(int*)malloc(MaxUser*sizeof(int));
     for(i=0;i<MaxUser;i++)
         for_thread.secSocket[i]=0;
@@ -317,13 +291,17 @@ int main(int argc, char* argv[]){
     for(i=0;i<N;i++)
     {
         for(j=0;j<N;j++){
-              for_thread.tabl[i][j]=htonl(tab[i][j]);
-              printf("%d ",tab[i][j]);
+              for_thread.tabl[i][j]=tab[i][j];
+             // printf("%d ",tab[i][j]);
         }
-        printf("\n");
     }
-    printf("\n");
-  
+    
+   for(i=0;i<N;i++)
+    {
+        free(tab[i]);
+    }
+    free(tab);
+   
     for(i=0;i<N;i++)
     {
         for(j=0;j<N;j++){
