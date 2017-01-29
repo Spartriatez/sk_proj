@@ -19,7 +19,7 @@ public class Memory_client {
      * @param args the command line arguments
      */
    
-    private static final int PORT = 1235;
+    private static final int PORT = 2002;
     private static final String HOST = "150.254.141.136";
     public static void main(String[] args) throws InterruptedException,IOException, ClassNotFoundException {
         // TODO code application logic here
@@ -38,8 +38,11 @@ public class Memory_client {
             wync[1]=in.readLine();
             //System.out.println(wync);
             tablica=mr.z_klienta_do_serwera(wync);
-            for(int i=0;i<4;i++)
+            for(int i=0;i<4;i++){
+                tablica[i]=tablica[i]+1;
                 System.out.print(tablica[i]+" ");
+                
+            }
             
               String v;
         String end=null;

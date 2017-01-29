@@ -24,6 +24,7 @@ struct TThreadData{
     int **tabl;
     int *active;
     int *wiadomosc;
+    pthread_t tid[2];
 };
 
 struct TThreadData for_thread;
@@ -129,8 +130,8 @@ int sprawdz_poprawnosc(int *tb,int *wart)
     if(for_thread.tabl[tb[0]][tb[1]]==for_thread.tabl[tb[2]][tb[3]] &&( tb[0]!=tb[2] && tb[1]!=tb[3]))
     {   wart[0]=for_thread.tabl[tb[0]][tb[1]];
         wart[1]=for_thread.tabl[tb[2]][tb[3]];
-        for_thread.tabl[tb[0]-1][tb[1]-1]=htonl(-1);
-        for_thread.tabl[tb[2]-1][tb[3]-1]=htonl(-1);
+        for_thread.tabl[tb[0]][tb[1]]=-1;
+        for_thread.tabl[tb[2]][tb[3]]=-1;
         return 2;
     }
     else
@@ -177,7 +178,7 @@ struct sockaddr_in stAddr;
 short end;
 
 int *tb;
-int q=0;
+
 int wiad;
 
 void* readingThread(void* data){
@@ -196,9 +197,10 @@ void* readingThread(void* data){
 	x=read(mSocket, buf, BUFSIZE);
     if(x<= 0 )
     {
+        int x=0;
         getpeername(mSocket , (struct sockaddr*)&stAddr, (socklen_t*)&nTmp); 
         printf("Host disconnected  port %d \n" , mSocket);
-        for(i=0;i<q;i++){
+        for(i=0;i<2;i++){
             
                       if(mSocket== for_thread.secSocket[i])
                       {
@@ -206,6 +208,15 @@ void* readingThread(void* data){
                     for_thread.active[i]=0;
                       break;
                       }
+        }
+        for(i=0;i<2;i++){
+            if(for_thread.active[i]==1){
+                        x=3;
+                          if(write(for_thread.secSocket[i],&x,sizeof(int)))
+                            { //perror("error");
+                                printf("for_thread %d\n",end);
+                            }
+                    }
         }
           close( mSocket );
           free(buf);
@@ -241,7 +252,7 @@ void* readingThread(void* data){
         printf("\n");
         if(end>0 && end<3)
         {
-           for(i=0;i<q;i++){
+           for(i=0;i<2;i++){
              
              if((write(for_thread.secSocket[i],for_thread.wiadomosc,(N-1)*sizeof(int))<0) && (for_thread.active[i]==1))
               { //perror("error");
@@ -272,6 +283,7 @@ int main(int argc, char* argv[]){
     int i,j;
     int kafelek=N*N/2;
     x=N;
+    int q=0;
     for_thread.wiadomosc=(int *)malloc((N-1)*sizeof(int));
    tab=(int**)malloc(N*sizeof(int*));
     for(i=0;i<N;i++)
@@ -349,7 +361,7 @@ int main(int argc, char* argv[]){
     /* block for connection request */
   
     
-    pthread_t tid[3];
+   
     
     while(1){
     nTmp = sizeof(struct sockaddr);
@@ -369,7 +381,7 @@ int main(int argc, char* argv[]){
     printf("%s: [connection from %s]\n",
                   argv[0], inet_ntoa((struct in_addr)stAddr.sin_addr));
     
-    create_result=pthread_create(&tid[q], NULL, readingThread,&mySocket);
+    create_result=pthread_create(&for_thread.tid[q], NULL, readingThread,&for_thread.secSocket[q]);
    
      if (create_result){
        printf("Błąd przy próbie utworzenia wątku, kod błędu: %d\n", create_result);
@@ -377,12 +389,17 @@ int main(int argc, char* argv[]){
        }
     
     printf("end %d\n",end);
-    if(end==0 &&  for_thread.active[q]==1){
-            write(mySocket,&x,sizeof(x));
+    if(q==1){
+        for(i=0;i<=q;i++)
+            write(for_thread.secSocket[i],&x,sizeof(x));
           
             end=9;
-           
-    } 
+           q=0;
+    } else
+    {
+        int l=1;
+         write(for_thread.secSocket[q],&l,sizeof(l));
+    }
             
     
    q++;
